@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# FastAPI
+*.db
+*.sqlite
+analytics.db
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Environment
+.env
+.env.local
+.env.example
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads & Temp
+uploads/
+temp/
+*.tmp
+
+# YOLOv8 models (download on deployment)
+*.pt
+
+# Video files
+test.mp4   
+test1.mp4
+test2.mp4  
+test3.mp4  
+test4.mp4  
+
+#heatmaps
+heatmaps/
+
+# models
+models/
+
+
+#yarn
+yarn.lock
