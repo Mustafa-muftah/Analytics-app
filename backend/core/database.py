@@ -1,21 +1,23 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-from config import settings
+from .config import settings
 
 Base = declarative_base()
 
 
+# ============ Models ============
+
 class Camera(Base):
-    """Camera/Zone configuration"""
     __tablename__ = "cameras"
     
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
     zone = Column(String, nullable=False, index=True)
     source = Column(String, nullable=False)
-    mode = Column(String, default="auto")  # realtime, batch, auto
+    mode = Column(String, default="auto")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -27,8 +29,8 @@ class PeopleCount(Base):
     camera_id = Column(String, default="default", index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     count = Column(Integer, nullable=False)
-    hour = Column(Integer, index=True)  # 0-23 for aggregation
-    
+    hour = Column(Integer, index=True)
+
 
 class Heatmap(Base):
     __tablename__ = "heatmaps"
@@ -37,7 +39,7 @@ class Heatmap(Base):
     camera_id = Column(String, default="default", index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     s3_url = Column(String, nullable=False)
-    processing_time = Column(Float)  # seconds
+    processing_time = Column(Float)
 
 
 class GenderStat(Base):
@@ -46,13 +48,12 @@ class GenderStat(Base):
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(String, default="default", index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    hour = Column(Integer, index=True)  # 0-23 for aggregation
+    hour = Column(Integer, index=True)
     male_count = Column(Integer, default=0)
     female_count = Column(Integer, default=0)
 
 
 class ZoneStat(Base):
-    """Aggregated zone statistics"""
     __tablename__ = "zone_stats"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -61,17 +62,16 @@ class ZoneStat(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     hour = Column(Integer, index=True)
     total_count = Column(Integer, default=0)
-    avg_dwell_time = Column(Float, default=0)  # seconds
+    avg_dwell_time = Column(Float, default=0)
 
 
 class ProcessingJob(Base):
-    """Track batch processing jobs"""
     __tablename__ = "processing_jobs"
     
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(String, index=True)
     source = Column(String, nullable=False)
-    status = Column(String, default="pending")  # pending, processing, completed, failed
+    status = Column(String, default="pending")
     mode = Column(String, default="batch")
     total_frames = Column(Integer, default=0)
     processed_frames = Column(Integer, default=0)
@@ -81,21 +81,19 @@ class ProcessingJob(Base):
 
 
 class UniqueVisitor(Base):
-    """Track unique visitors with their track ID"""
     __tablename__ = "unique_visitors"
     
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(String, index=True)
-    track_id = Column(Integer, index=True)  # DeepSORT track ID
+    track_id = Column(Integer, index=True)
     first_seen = Column(DateTime, default=datetime.utcnow, index=True)
     last_seen = Column(DateTime, default=datetime.utcnow)
-    gender = Column(String)  # male, female, unknown
-    dwell_time = Column(Float, default=0)  # seconds
-    is_active = Column(Boolean, default=True)  # currently in frame
+    gender = Column(String)
+    dwell_time = Column(Float, default=0)
+    is_active = Column(Boolean, default=True)
 
 
 class DwellTimeStats(Base):
-    """Aggregated dwell time statistics"""
     __tablename__ = "dwell_time_stats"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -103,21 +101,38 @@ class DwellTimeStats(Base):
     zone = Column(String, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     hour = Column(Integer, index=True)
-    avg_dwell_time = Column(Float, default=0)  # seconds
+    avg_dwell_time = Column(Float, default=0)
     min_dwell_time = Column(Float, default=0)
     max_dwell_time = Column(Float, default=0)
     visitor_count = Column(Integer, default=0)
 
 
-# Database setup
-engine = create_engine(
+# ============ Database Connections ============
+
+# Async engine for FastAPI
+async_engine = create_async_engine(settings.database_url, echo=False)
+async_session = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+
+# Sync engine for background tasks
+sync_engine = create_engine(
     settings.database_url.replace("+aiosqlite", ""),
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
 )
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 
 def init_db():
     """Initialize database tables"""
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=sync_engine)
+
+
+async def init_async_db():
+    """Initialize database tables (async)"""
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+# Dependency for FastAPI
+async def get_db():
+    async with async_session() as session:
+        yield session

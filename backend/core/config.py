@@ -12,20 +12,18 @@ class CameraConfig:
         self.name = name
         self.zone = zone
         self.source = source
-        self.mode = mode  # "realtime", "batch", "auto"
-        self.frame_skip = frame_skip  # For batch mode: process every Nth frame
+        self.mode = mode
+        self.frame_skip = frame_skip
         self.enabled = enabled
     
     def is_batch_mode(self) -> bool:
-        """Determine if batch mode should be used"""
         if self.mode == "batch":
             return True
         if self.mode == "realtime":
             return False
-        # Auto-detect: file = batch, stream = realtime
         if self.source.startswith(("rtsp://", "rtmp://", "http://")) or self.source.isdigit():
             return False
-        return True  # Local file = batch mode
+        return True
 
 
 class Settings(BaseSettings):
@@ -49,25 +47,27 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     
     # Analytics Settings
-    heatmap_interval: int = 300  # 5 minutes in seconds
+    heatmap_interval: int = 300
     detection_confidence: float = 0.5
-    batch_frame_skip: int = 30  # Process every Nth frame in batch mode
+    batch_frame_skip: int = 30
     
-    # Processing
+    # Feature Flags
     enable_gender_detection: bool = True
     enable_heatmap: bool = True
+    enable_notifications: bool = False
+    
+    # Redis (for future async tasks)
+    redis_url: str = "redis://localhost:6379/0"
     
     class Config:
         env_file = ".env"
         case_sensitive = False
     
     def get_cameras(self) -> List[CameraConfig]:
-        """Parse camera configuration from JSON string"""
         try:
             cameras_data = json.loads(self.cameras_config)
             return [CameraConfig(**cam) for cam in cameras_data]
         except json.JSONDecodeError:
-            # Fallback to legacy single camera
             return [CameraConfig(
                 id="default",
                 name="Main Camera", 
